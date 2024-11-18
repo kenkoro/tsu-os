@@ -1,7 +1,7 @@
 package com.kenkoro;
 
 class Monitor {
-  private static boolean ready = false;
+  private static volatile boolean ready = false;
 
   public synchronized void produce() {
     if (ready) return;
