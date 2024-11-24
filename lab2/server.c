@@ -1,0 +1,151 @@
+#include <arpa/inet.h>
+#include <errno.h>
+#include <netinet/in.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <unistd.h>
+
+#define PORT 2727
+#define BACKLOG 5
+#define SIGCONNUM 3
+#define BUFSIZE 2048
+
+volatile sig_atomic_t sighup_received = 0;
+
+void handler() { sighup_received = 1; }
+
+void on_exit(const char *msg) {
+  perror(msg);
+  exit(EXIT_FAILURE);
+}
+
+int safe_socket(int domain, int type, int protocol) {
+  int res = socket(domain, type, protocol);
+
+  if (res < 0)
+    on_exit("Socket creation has failed");
+
+  return res;
+}
+
+int safe_bind(int socket_fd, const struct sockaddr *addr, socklen_t addrlen) {
+  int res = bind(socket_fd, addr, addrlen);
+
+  if (res < 0)
+    on_exit("Binding has failed");
+
+  return res;
+}
+
+int safe_listen(int socket_fd, int backlog) {
+  int res = listen(socket_fd, backlog);
+
+  if (res < 0)
+    on_exit("Couldn't perform listening");
+
+  return res;
+}
+
+int safe_accept(int socket_fd, struct sockaddr *addr, socklen_t *addrlen) {
+  int res = accept(socket_fd, addr, addrlen);
+
+  if (res < 0)
+    on_exit("Couldn't accept the socket");
+
+  return res;
+}
+
+int find_max(int a, int b) { return a > b ? a : b; }
+
+int main() {
+  int max, bytes;
+  int incoming_socket_fd = 0;
+  int clients_count = 0;
+  struct sockaddr_in socket_addr;
+  struct sigaction s_action;
+  fd_set readfds;
+  sigset_t blocked_mask, orig_mask;
+  char buf[BUFSIZE] = {0};
+
+  int server_fd = safe_socket(AF_INET, SOCK_STREAM, 0);
+
+  socket_addr.sin_family = AF_INET;
+  int bind_addr = inet_pton(AF_INET, "127.0.0.1", &socket_addr.sin_addr);
+  if (bind_addr <= 0)
+    on_exit("This address is not supported\n");
+  socket_addr.sin_port = htons(PORT);
+
+  safe_bind(server_fd, (struct sockaddr *)&socket_addr, sizeof(socket_addr));
+  safe_listen(server_fd, BACKLOG);
+
+  sigaction(SIGHUP, NULL, &s_action);
+  s_action.sa_handler = handler;
+  s_action.sa_flags |= SA_RESTART;
+  sigaction(SIGHUP, &s_action, NULL);
+
+  sigemptyset(&blocked_mask);
+  sigemptyset(&orig_mask);
+  sigaddset(&blocked_mask, SIGHUP);
+  sigprocmask(SIG_BLOCK, &blocked_mask, &orig_mask);
+
+  while (clients_count <= 1) {
+    FD_ZERO(&readfds);
+    FD_SET(server_fd, &readfds);
+
+    if (incoming_socket_fd > 0)
+      FD_SET(incoming_socket_fd, &readfds);
+
+    max = find_max(incoming_socket_fd, server_fd);
+
+    if (pselect(max + 1, &readfds, NULL, NULL, NULL, &orig_mask) < 0 &&
+        errno != EINTR) {
+      on_exit("Couldn't monitor fds\n");
+    }
+
+    if (sighup_received) {
+      printf("Sighup signal has been received\n");
+      sighup_received = 0;
+      continue;
+    }
+
+    if (incoming_socket_fd > 0 && FD_ISSET(incoming_socket_fd, &readfds)) {
+      bytes = read(incoming_socket_fd, buf, BUFSIZE);
+
+      if (bytes > 0) {
+        printf("Received bytes: %d\n\n", bytes);
+      } else {
+        if (bytes == 0) {
+          close(incoming_socket_fd);
+          incoming_socket_fd = 0;
+        } else {
+          perror("Couldn't read incoming bytes of the socket fd\n");
+        }
+      }
+
+      continue;
+    }
+
+    if (FD_ISSET(server_fd, &readfds)) {
+      printf("Connected clients: %d\n", clients_count);
+      int addrlen = sizeof(socket_addr);
+      incoming_socket_fd = safe_accept(
+          server_fd, (struct sockaddr *)&socket_addr, (socklen_t *)&addrlen);
+
+      printf("New connection has been established: %d\n", incoming_socket_fd);
+      clients_count++;
+
+      if (clients_count > 1) {
+        printf("Closing the connection: %d\n\n", incoming_socket_fd);
+        close(incoming_socket_fd);
+        incoming_socket_fd = 0;
+        clients_count--;
+      }
+    }
+  }
+  close(server_fd);
+
+  return 0;
+}
