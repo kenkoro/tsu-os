@@ -69,7 +69,7 @@ int main() {
   sigset_t blocked_mask, orig_mask;
   char buf[BUFSIZE] = {0};
 
-  int server_fd = safe_socket(AF_INET, SOCK_STREAM, 0);
+  int server_socker_fd = safe_socket(AF_INET, SOCK_STREAM, 0);
 
   socket_addr.sin_family = AF_INET;
   int bind_addr = inet_pton(AF_INET, "127.0.0.1", &socket_addr.sin_addr);
@@ -77,8 +77,8 @@ int main() {
     on_exit("This address is not supported\n");
   socket_addr.sin_port = htons(PORT);
 
-  safe_bind(server_fd, (struct sockaddr *)&socket_addr, sizeof(socket_addr));
-  safe_listen(server_fd, BACKLOG);
+  safe_bind(server_socker_fd, (struct sockaddr *)&socket_addr, sizeof(socket_addr));
+  safe_listen(server_socker_fd, BACKLOG);
 
   sigaction(SIGHUP, NULL, &s_action);
   s_action.sa_handler = handler;
@@ -92,12 +92,12 @@ int main() {
 
   while (clients_count <= 1) {
     FD_ZERO(&readfds);
-    FD_SET(server_fd, &readfds);
+    FD_SET(server_socker_fd, &readfds);
 
     if (incoming_socket_fd > 0)
       FD_SET(incoming_socket_fd, &readfds);
 
-    max = find_max(incoming_socket_fd, server_fd);
+    max = find_max(incoming_socket_fd, server_socker_fd);
 
     if (pselect(max + 1, &readfds, NULL, NULL, NULL, &orig_mask) < 0 &&
         errno != EINTR) {
@@ -127,11 +127,11 @@ int main() {
       continue;
     }
 
-    if (FD_ISSET(server_fd, &readfds)) {
+    if (FD_ISSET(server_socker_fd, &readfds)) {
       printf("Connected clients: %d\n", clients_count);
       int addrlen = sizeof(socket_addr);
       incoming_socket_fd = safe_accept(
-          server_fd, (struct sockaddr *)&socket_addr, (socklen_t *)&addrlen);
+          server_socker_fd, (struct sockaddr *)&socket_addr, (socklen_t *)&addrlen);
 
       printf("New connection has been established: %d\n", incoming_socket_fd);
       clients_count++;
@@ -144,7 +144,7 @@ int main() {
       }
     }
   }
-  close(server_fd);
+  close(server_socker_fd);
 
   return 0;
 }
