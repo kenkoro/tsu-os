@@ -10,7 +10,6 @@
 
 #define PORT 2727
 #define BACKLOG 5
-#define SIGCONNUM 3
 #define BUFSIZE 2048
 
 volatile sig_atomic_t sighup_received = 0;
