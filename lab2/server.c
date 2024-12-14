@@ -60,7 +60,7 @@ int safe_accept(int socket_fd, struct sockaddr *addr, socklen_t *addrlen) {
 int max(int a, int b) { return a > b ? a : b; }
 
 int main() {
-  int max, bytes;
+  int max_fd, bytes;
   int incoming_socket_fd = 0;
   struct sockaddr_in socket_addr;
   struct sigaction s_action;
@@ -97,9 +97,9 @@ int main() {
     if (incoming_socket_fd > 0)
       FD_SET(incoming_socket_fd, &readfds);
 
-    max = max(incoming_socket_fd, server_socker_fd);
+    max_fd = max(incoming_socket_fd, server_socker_fd);
 
-    if (pselect(max + 1, &readfds, NULL, NULL, NULL, &orig_mask) < 0 &&
+    if (pselect(max_fd + 1, &readfds, NULL, NULL, NULL, &orig_mask) < 0 &&
         errno != EINTR) {
       on_exit("Couldn't monitor fds\n");
     }
