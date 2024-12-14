@@ -57,7 +57,7 @@ int safe_accept(int socket_fd, struct sockaddr *addr, socklen_t *addrlen) {
   return res;
 }
 
-int find_max(int a, int b) { return a > b ? a : b; }
+int max(int a, int b) { return a > b ? a : b; }
 
 int main() {
   int max, bytes;
@@ -97,7 +97,7 @@ int main() {
     if (incoming_socket_fd > 0)
       FD_SET(incoming_socket_fd, &readfds);
 
-    max = find_max(incoming_socket_fd, server_socker_fd);
+    max = max(incoming_socket_fd, server_socker_fd);
 
     if (pselect(max + 1, &readfds, NULL, NULL, NULL, &orig_mask) < 0 &&
         errno != EINTR) {
