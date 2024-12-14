@@ -62,7 +62,6 @@ int find_max(int a, int b) { return a > b ? a : b; }
 int main() {
   int max, bytes;
   int incoming_socket_fd = 0;
-  int clients_count = 0;
   struct sockaddr_in socket_addr;
   struct sigaction s_action;
   fd_set readfds;
@@ -77,7 +76,8 @@ int main() {
     on_exit("This address is not supported\n");
   socket_addr.sin_port = htons(PORT);
 
-  safe_bind(server_socker_fd, (struct sockaddr *)&socket_addr, sizeof(socket_addr));
+  safe_bind(server_socker_fd, (struct sockaddr *)&socket_addr,
+            sizeof(socket_addr));
   safe_listen(server_socker_fd, BACKLOG);
 
   sigaction(SIGHUP, NULL, &s_action);
@@ -90,7 +90,7 @@ int main() {
   sigaddset(&blocked_mask, SIGHUP);
   sigprocmask(SIG_BLOCK, &blocked_mask, &orig_mask);
 
-  while (clients_count <= 1) {
+  for (;;) {
     FD_ZERO(&readfds);
     FD_SET(server_socker_fd, &readfds);
 
@@ -128,20 +128,12 @@ int main() {
     }
 
     if (FD_ISSET(server_socker_fd, &readfds)) {
-      printf("Connected clients: %d\n", clients_count);
       int addrlen = sizeof(socket_addr);
-      incoming_socket_fd = safe_accept(
-          server_socker_fd, (struct sockaddr *)&socket_addr, (socklen_t *)&addrlen);
+      incoming_socket_fd =
+          safe_accept(server_socker_fd, (struct sockaddr *)&socket_addr,
+                      (socklen_t *)&addrlen);
 
       printf("New connection has been established: %d\n", incoming_socket_fd);
-      clients_count++;
-
-      if (clients_count > 1) {
-        printf("Closing the connection: %d\n\n", incoming_socket_fd);
-        close(incoming_socket_fd);
-        incoming_socket_fd = 0;
-        clients_count--;
-      }
     }
   }
   close(server_socker_fd);
